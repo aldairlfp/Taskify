@@ -37,7 +37,9 @@ class TaskUpdate(BaseModel):
             return None
         if v not in ["done", "pending"]:
             raise ValueError('State must be either "done" or "pending"')
-        return v == "done"  # Convert to boolean: "done" -> True, "pending" -> False
+        # Don't convert here - return the original string
+        # The conversion will happen in the router
+        return v
 
 
 class UserCreate(UserBase):

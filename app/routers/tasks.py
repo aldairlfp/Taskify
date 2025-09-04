@@ -94,7 +94,11 @@ def update_task(
     # Update only the fields that are provided
     task_data = task_update.model_dump(exclude_unset=True)
     for field, value in task_data.items():
-        setattr(task, field, value)
+        if field == "state" and isinstance(value, str):
+            # Convert "done"/"pending" string to boolean
+            setattr(task, field, value == "done")
+        else:
+            setattr(task, field, value)
 
     # Update the updated_at timestamp
     from datetime import datetime
