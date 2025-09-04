@@ -1,0 +1,44 @@
+from sqlmodel import SQLModel, Field, Relationship
+from datetime import datetime
+from typing import Optional, List
+import uuid
+
+
+class User(SQLModel, table=True):
+    """
+    User model - represents users in our system
+    Each user can have multiple tasks
+    """
+
+    __tablename__ = "users"
+
+    id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True)
+    username: str = Field(max_length=50, unique=True, index=True)
+    email: str = Field(max_length=100, unique=True, index=True)
+    hashed_password: str = Field(max_length=255)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship with tasks
+    tasks: List["Task"] = Relationship(back_populates="owner")
+
+
+class Task(SQLModel, table=True):
+    """
+    Task model - represents a TODO item
+    Each task belongs to a user
+    """
+
+    __tablename__ = "tasks"
+
+    id: Optional[uuid.UUID] = Field(default_factory=uuid.uuid4, primary_key=True)
+    title: str = Field(max_length=200)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    state: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Foreign key to users table
+    user_id: uuid.UUID = Field(foreign_key="users.id")
+
+    # Relationship with user
+    owner: Optional[User] = Relationship(back_populates="tasks")
