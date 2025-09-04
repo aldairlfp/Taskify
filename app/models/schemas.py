@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, field_serializer, field_validator
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -12,7 +12,7 @@ class TaskBase(BaseModel):
 
 class UserBase(BaseModel):
     username: str
-    email: EmailStr
+    email: str  # Changed from EmailStr to str temporarily
 
 
 # Request schemas (what we receive from the client)
@@ -27,7 +27,17 @@ class TaskUpdate(BaseModel):
 
     title: Optional[str] = None
     description: Optional[str] = None
-    completed: Optional[bool] = None
+    state: Optional[str] = None  # Accept "done" or "pending"
+
+    @field_validator("state")
+    @classmethod
+    def validate_state(cls, v):
+        """Convert string state to boolean and validate"""
+        if v is None:
+            return None
+        if v not in ["done", "pending"]:
+            raise ValueError('State must be either "done" or "pending"')
+        return v == "done"  # Convert to boolean: "done" -> True, "pending" -> False
 
 
 class UserCreate(UserBase):
@@ -41,13 +51,18 @@ class Task(TaskBase):
     """Schema for task responses"""
 
     id: uuid.UUID
-    state: bool
+    state: bool  # Internal field (boolean from database)
     created_at: datetime
     updated_at: datetime
     user_id: uuid.UUID
 
     class Config:
         from_attributes = True  # This allows Pydantic to work with SQLAlchemy models
+
+    @field_serializer("state")
+    def serialize_state(self, state: bool) -> str:
+        """Convert boolean state to user-friendly string"""
+        return "done" if state else "pending"
 
 
 class User(UserBase):

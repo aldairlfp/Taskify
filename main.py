@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.core.init_db import create_tables
+from app.routers import tasks
 
 # Crear la instancia de FastAPI
 app = FastAPI(
@@ -7,6 +8,10 @@ app = FastAPI(
     description="Una API REST para administrar tareas (TODOs)",
     version="1.0.0",
 )
+
+# Include routers
+app.include_router(tasks.router)
+
 
 # Create database tables on startup
 @app.on_event("startup")
@@ -17,7 +22,9 @@ async def startup_event():
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Error initializing database: {e}")
-        print("Make sure PostgreSQL is running and connection details are correct in .env file")
+        print(
+            "Make sure PostgreSQL is running and connection details are correct in .env file"
+        )
 
 
 # Ruta básica de prueba
