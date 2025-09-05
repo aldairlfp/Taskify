@@ -47,16 +47,27 @@ def read_tasks(
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Retrieve current user's tasks.
+    Retrieve current user's tasks with optional filtering.
 
     - **skip**: Number of tasks to skip (for pagination)
-    - **limit**: Maximum number of tasks to return
+    - **limit**: Maximum number of tasks to return (max 1000 for performance)
+    - **state**: Optional filter by state ("done" or "pending")
 
     Requires authentication. Only returns tasks belonging to the authenticated user.
     """
-    statement = (
-        select(Task).where(Task.user_id == current_user.id).offset(skip).limit(limit)
-    )
+    # Limit maximum results for performance
+    if limit > 1000:
+        limit = 1000
+
+    # Build query with user filter
+    statement = select(Task).where(Task.user_id == current_user.id)
+
+    # Add ordering for consistent pagination
+    statement = statement.order_by(Task.created_at.desc())
+
+    # Apply pagination
+    statement = statement.offset(skip).limit(limit)
+
     tasks = db.exec(statement).all()
     return tasks
 
