@@ -28,18 +28,6 @@ async def startup_event():
         )
 
 
-# Ruta básica de prueba
-@app.get("/")
-async def root():
-    return {"message": "¡Bienvenido a Taskify API!"}
-
-
-# Ruta de health check
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "Taskify API"}
-
-
 # Para ejecutar con: uvicorn main:app --reload
 if __name__ == "__main__":
     import uvicorn
