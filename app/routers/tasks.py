@@ -4,6 +4,7 @@ from typing import List
 import uuid
 
 from app.core.database import get_db
+from app.core.auth import get_current_active_user
 from app.models.models import Task, User
 from app.models.schemas import TaskCreate, TaskUpdate, Task as TaskResponse
 
@@ -14,34 +15,24 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# Temporary user ID for testing (until we add authentication)
-TEMP_USER_ID = uuid.uuid4()
-
 
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+def create_task(
+    task: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Create a new task.
 
     - **title**: Task title (required)
     - **description**: Task description (optional)
-    """
-    # For now, we'll create a temporary user if it doesn't exist
-    # In a real app, this would come from authentication
-    user = db.exec(select(User).where(User.id == TEMP_USER_ID)).first()
-    if not user:
-        temp_user = User(
-            id=TEMP_USER_ID,
-            username="testuser",
-            email="test@example.com",
-            hashed_password="temp_password",
-        )
-        db.add(temp_user)
-        db.commit()
-        db.refresh(temp_user)
-        user = temp_user
 
-    db_task = Task(title=task.title, description=task.description, user_id=user.id)
+    Requires authentication.
+    """
+    db_task = Task(
+        title=task.title, description=task.description, user_id=current_user.id
+    )
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
@@ -49,24 +40,41 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[TaskResponse])
-def read_tasks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_tasks(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     """
-    Retrieve tasks.
+    Retrieve current user's tasks.
 
     - **skip**: Number of tasks to skip (for pagination)
     - **limit**: Maximum number of tasks to return
+
+    Requires authentication. Only returns tasks belonging to the authenticated user.
     """
-    statement = select(Task).offset(skip).limit(limit)
+    statement = (
+        select(Task).where(Task.user_id == current_user.id).offset(skip).limit(limit)
+    )
     tasks = db.exec(statement).all()
     return tasks
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
-def read_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
+def read_task(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get a specific task by ID.
+
+    Requires authentication. Only returns task if it belongs to the authenticated user.
     """
-    task = db.exec(select(Task).where(Task.id == task_id)).first()
+    task = db.exec(
+        select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
+    ).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
@@ -76,16 +84,23 @@ def read_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.put("/{task_id}", response_model=TaskResponse)
 def update_task(
-    task_id: uuid.UUID, task_update: TaskUpdate, db: Session = Depends(get_db)
+    task_id: uuid.UUID,
+    task_update: TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Update a task.
 
     - **title**: New task title (optional)
     - **description**: New task description (optional)
-    - **state**: Task completion status (optional)
+    - **state**: Task completion status - "done" or "pending" (optional)
+
+    Requires authentication. Only allows updating tasks that belong to the authenticated user.
     """
-    task = db.exec(select(Task).where(Task.id == task_id)).first()
+    task = db.exec(
+        select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
+    ).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
@@ -112,11 +127,19 @@ def update_task(
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
+def delete_task(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Delete a task.
+
+    Requires authentication. Only allows deleting tasks that belong to the authenticated user.
     """
-    task = db.exec(select(Task).where(Task.id == task_id)).first()
+    task = db.exec(
+        select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
+    ).first()
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
@@ -125,3 +148,81 @@ def delete_task(task_id: uuid.UUID, db: Session = Depends(get_db)):
     db.delete(task)
     db.commit()
     return None
+
+
+# Additional convenience endpoints
+@router.get("/done/", response_model=List[TaskResponse])
+def get_done_tasks(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get all completed tasks for the current user.
+
+    Requires authentication.
+    """
+    statement = (
+        select(Task)
+        .where(Task.user_id == current_user.id, Task.state == True)
+        .offset(skip)
+        .limit(limit)
+    )
+    tasks = db.exec(statement).all()
+    return tasks
+
+
+@router.get("/pending/", response_model=List[TaskResponse])
+def get_pending_tasks(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Get all pending tasks for the current user.
+
+    Requires authentication.
+    """
+    statement = (
+        select(Task)
+        .where(Task.user_id == current_user.id, Task.state == False)
+        .offset(skip)
+        .limit(limit)
+    )
+    tasks = db.exec(statement).all()
+    return tasks
+
+
+@router.patch("/{task_id}/toggle/", response_model=TaskResponse)
+def toggle_task_state(
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Toggle task state between done and pending.
+
+    Requires authentication. Only allows toggling tasks that belong to the authenticated user.
+    """
+    task = db.exec(
+        select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
+    ).first()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
+
+    # Toggle the state
+    task.state = not task.state
+
+    # Update timestamp
+    from datetime import datetime
+
+    task.updated_at = datetime.utcnow()
+
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task

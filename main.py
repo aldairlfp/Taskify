@@ -1,16 +1,17 @@
 from fastapi import FastAPI
 from app.core.init_db import create_tables
-from app.routers import tasks
+from app.routers import tasks, auth
 
 # Crear la instancia de FastAPI
 app = FastAPI(
     title="Taskify API",
-    description="Una API REST para administrar tareas (TODOs)",
+    description="Una API REST para administrar tareas (TODOs) con autenticación JWT",
     version="1.0.0",
 )
 
 # Include routers
-app.include_router(tasks.router)
+app.include_router(auth.router)  # Authentication routes
+app.include_router(tasks.router)  # Task management routes
 
 
 # Create database tables on startup
