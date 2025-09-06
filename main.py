@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.core.init_db import create_tables
+from app.core.database import create_tables, close_async_engine
 from app.routers import tasks, auth
 from app.core.exceptions import (
     http_exception_handler,
@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     """Handle application startup and shutdown events"""
     # Startup
     try:
-        create_tables()
+        await create_tables()
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Error initializing database: {e}")
@@ -31,6 +31,11 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    try:
+        await close_async_engine()
+        print("Database connections closed.")
+    except Exception as e:
+        print(f"Error closing database connections: {e}")
     print("Application shutting down...")
 
 
@@ -46,7 +51,8 @@ app = FastAPI(
 
 # Add security middleware
 app.add_middleware(
-    TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "*.yourdomain.com"]
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1", "testserver", "*.yourdomain.com"],
 )
 
 # Add CORS middleware for web frontend support

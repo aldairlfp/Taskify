@@ -2,9 +2,11 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 
-# Database - Using SQLModel instead of SQLAlchemy directly
+# Database - Using SQLModel with async support
 sqlmodel==0.0.22
 psycopg2-binary==2.9.10
+asyncpg==0.29.0
+sqlalchemy[asyncio]==2.0.32
 
 # Authentication
 python-jose[cryptography]==3.3.0

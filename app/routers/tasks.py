@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 from typing import List
 import uuid
 
@@ -17,13 +18,13 @@ router = APIRouter(
 
 
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(
+async def create_task(
     task: TaskCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Create a new task.
+    Create a new task (async).
 
     - **title**: Task title (required)
     - **description**: Task description (optional)
@@ -34,20 +35,20 @@ def create_task(
         title=task.title, description=task.description, user_id=current_user.id
     )
     db.add(db_task)
-    db.commit()
-    db.refresh(db_task)
+    await db.commit()
+    await db.refresh(db_task)
     return db_task
 
 
 @router.get("/", response_model=List[TaskResponse])
-def read_tasks(
+async def read_tasks(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Retrieve current user's tasks with optional filtering.
+    Retrieve current user's tasks with optional filtering (async).
 
     - **skip**: Number of tasks to skip (for pagination)
     - **limit**: Maximum number of tasks to return (max 1000 for performance)
@@ -68,24 +69,28 @@ def read_tasks(
     # Apply pagination
     statement = statement.offset(skip).limit(limit)
 
-    tasks = db.exec(statement).all()
+    # Execute async query
+    result = await db.execute(statement)
+    tasks = result.scalars().all()
     return tasks
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
-def read_task(
+async def read_task(
     task_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Get a specific task by ID.
+    Get a specific task by ID (async).
 
     Requires authentication. Only returns task if it belongs to the authenticated user.
     """
-    task = db.exec(
+    result = await db.execute(
         select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
-    ).first()
+    )
+    task = result.scalar_one_or_none()
+
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
@@ -94,14 +99,14 @@ def read_task(
 
 
 @router.put("/{task_id}", response_model=TaskResponse)
-def update_task(
+async def update_task(
     task_id: uuid.UUID,
     task_update: TaskUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Update a task.
+    Update a task (async).
 
     - **title**: New task title (optional)
     - **description**: New task description (optional)
@@ -109,9 +114,11 @@ def update_task(
 
     Requires authentication. Only allows updating tasks that belong to the authenticated user.
     """
-    task = db.exec(
+    result = await db.execute(
         select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
-    ).first()
+    )
+    task = result.scalar_one_or_none()
+
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
@@ -132,30 +139,32 @@ def update_task(
     task.updated_at = datetime.utcnow()
 
     db.add(task)
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     return task
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(
+async def delete_task(
     task_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
-    Delete a task.
+    Delete a task (async).
 
     Requires authentication. Only allows deleting tasks that belong to the authenticated user.
     """
-    task = db.exec(
+    result = await db.execute(
         select(Task).where(Task.id == task_id, Task.user_id == current_user.id)
-    ).first()
+    )
+    task = result.scalar_one_or_none()
+
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
         )
 
-    db.delete(task)
-    db.commit()
+    await db.delete(task)
+    await db.commit()
     return None

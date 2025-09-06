@@ -1,11 +1,12 @@
 """
-Authentication router for user registration, login, and profile management
+Async authentication router for user registration, login, and profile management
 """
 
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import Session, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.core.database import get_db
 from app.core.auth import (
@@ -28,18 +29,18 @@ router = APIRouter(
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
-def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
+async def register_user(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     """
-    Register a new user
+    Register a new user (async)
 
     - **username**: Unique username
     - **email**: User email address
     - **password**: User password (will be hashed)
     """
     # Check if username already exists
-    existing_user = db.exec(
-        select(User).where(User.username == user_data.username)
-    ).first()
+    result = await db.execute(select(User).where(User.username == user_data.username))
+    existing_user = result.scalar_one_or_none()
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -47,7 +48,9 @@ def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
         )
 
     # Check if email already exists
-    existing_email = db.exec(select(User).where(User.email == user_data.email)).first()
+    result = await db.execute(select(User).where(User.email == user_data.email))
+    existing_email = result.scalar_one_or_none()
+
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
@@ -62,22 +65,22 @@ def register_user(user_data: UserRegister, db: Session = Depends(get_db)):
     )
 
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
     return db_user
 
 
 @router.post("/login", response_model=Token)
-def login_user(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+async def login_user(
+    form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
 ):
     """
-    Login user and return JWT token
+    Login user and return JWT token (async)
 
     - **username**: User's username
     - **password**: User's password
     """
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -94,9 +97,9 @@ def login_user(
 
 
 @router.get("/me", response_model=UserResponse)
-def read_users_me(current_user: User = Depends(get_current_active_user)):
+async def read_users_me(current_user: User = Depends(get_current_active_user)):
     """
-    Get current user profile
+    Get current user profile (async)
 
     Requires authentication token
     """
@@ -104,11 +107,12 @@ def read_users_me(current_user: User = Depends(get_current_active_user)):
 
 
 @router.get("/me/tasks")
-def read_user_tasks(
-    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
+async def read_user_tasks(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Get current user's tasks
+    Get current user's tasks (async)
 
     Requires authentication token
     """
@@ -116,5 +120,6 @@ def read_user_tasks(
     from app.models.models import Task
     from typing import List
 
-    tasks = db.exec(select(Task).where(Task.user_id == current_user.id)).all()
+    result = await db.execute(select(Task).where(Task.user_id == current_user.id))
+    tasks = result.scalars().all()
     return tasks
