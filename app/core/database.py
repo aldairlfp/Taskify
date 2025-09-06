@@ -17,18 +17,18 @@ if DATABASE_URL.startswith("postgresql://"):
 else:
     ASYNC_DATABASE_URL = DATABASE_URL
 
-# Create async SQLModel engine with production-optimized settings
+# Create async SQLModel engine with high-concurrency optimized settings
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=False,  # Disable SQL logging in production
-    pool_size=10,  # Connection pool size for concurrency
-    max_overflow=20,  # Additional connections when pool is full
+    pool_size=20,  # Increased base connection pool for high concurrency
+    max_overflow=30,  # Additional connections when pool is full (total: 50)
     pool_pre_ping=True,  # Verify connections before use
-    pool_recycle=3600,  # Recycle connections after 1 hour
-    # Async specific settings
-    pool_timeout=30,  # Timeout for getting connection from pool
+    pool_recycle=1800,  # Recycle connections after 30 minutes (faster refresh)
+    # Async specific settings optimized for concurrency
+    pool_timeout=10,  # Reduced timeout for faster fail-over
     connect_args={
-        "command_timeout": 60,  # Command timeout in seconds
+        "command_timeout": 30,  # Reduced command timeout
         "server_settings": {
             "jit": "off",  # Disable JIT for better performance in some cases
         },

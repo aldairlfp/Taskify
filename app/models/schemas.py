@@ -513,11 +513,21 @@ class Task(TaskBase):
 
 
 class User(UserBase):
-    """Schema for user responses"""
+    """Schema for user responses (with tasks)"""
 
     id: uuid.UUID
     created_at: datetime
     tasks: list[Task] = []
+
+    class Config:
+        from_attributes = True
+
+
+class UserSimple(UserBase):
+    """Schema for simple user responses (without tasks)"""
+
+    id: uuid.UUID
+    created_at: datetime
 
     class Config:
         from_attributes = True

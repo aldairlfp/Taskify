@@ -17,7 +17,7 @@ from app.core.auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
 from app.models.models import User
-from app.models.schemas import Token, UserRegister, User as UserResponse
+from app.models.schemas import Token, UserRegister, User as UserResponse, UserSimple
 
 router = APIRouter(
     prefix="/auth",
@@ -27,7 +27,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/register", response_model=UserSimple, status_code=status.HTTP_201_CREATED
 )
 async def register_user(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     """
@@ -96,7 +96,7 @@ async def login_user(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserSimple)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
     """
     Get current user profile (async)
