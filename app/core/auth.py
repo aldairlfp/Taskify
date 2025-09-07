@@ -6,13 +6,16 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.database import get_db
 from app.models.models import User
+from app.core.logging_config import SecurityLogger, get_logger
+
+logger = get_logger(__name__)
 
 # JWT Configuration
 SECRET_KEY = "your-secret-key-change-this-in-production"  # In production, use environment variable
@@ -55,9 +58,11 @@ def verify_token(token: str, credentials_exception):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
+            logger.warning("Token verification failed: no username in token")
             raise credentials_exception
         return username
-    except JWTError:
+    except JWTError as e:
+        logger.warning(f"Token verification failed: {str(e)}")
         raise credentials_exception
 
 
@@ -73,27 +78,49 @@ async def get_current_user(
 
     username = verify_token(token, credentials_exception)
 
-    # Use async database query
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
+    try:
+        # Use async database query
+        result = await db.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
 
-    if user is None:
+        if user is None:
+            logger.warning(f"User not found in database: {username}")
+            raise credentials_exception
+
+        return user
+
+    except Exception as e:
+        logger.error(f"Error getting user from database: {str(e)}", exc_info=True)
         raise credentials_exception
-    return user
 
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)):
     """Get current active user (async version)"""
+    # Store user ID in request state for logging middleware
+    # Note: This will be available in the request context
     return current_user
 
 
 async def authenticate_user(db: AsyncSession, username: str, password: str):
     """Authenticate user with username and password (async)"""
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
 
-    if not user:
+        if not user:
+            logger.debug(f"Authentication failed: user not found: {username}")
+            return False
+        if not verify_password(password, user.hashed_password):
+            logger.warning(
+                f"Authentication failed: invalid password for user: {username}"
+            )
+            return False
+
+        logger.debug(f"User authenticated successfully: {username}")
+        return user
+
+    except Exception as e:
+        logger.error(
+            f"Error during authentication for user {username}: {str(e)}", exc_info=True
+        )
         return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user

@@ -11,8 +11,14 @@ from app.core.exceptions import (
     general_exception_handler,
     starlette_exception_handler,
 )
+from app.core.middleware import LoggingMiddleware, PerformanceLoggingMiddleware
+from app.core.logging_config import setup_logging, get_logger
 import time
 from contextlib import asynccontextmanager
+
+# Initialize logging system
+setup_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -21,10 +27,10 @@ async def lifespan(app: FastAPI):
     # Startup
     try:
         await create_tables()
-        print("Database initialized successfully!")
+        logger.info("Database initialized successfully!")
     except Exception as e:
-        print(f"Error initializing database: {e}")
-        print(
+        logger.error(f"Error initializing database: {e}", exc_info=True)
+        logger.error(
             "Make sure PostgreSQL is running and connection details are correct in .env file"
         )
 
@@ -33,10 +39,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     try:
         await close_async_engine()
-        print("Database connections closed.")
+        logger.info("Database connections closed.")
     except Exception as e:
-        print(f"Error closing database connections: {e}")
-    print("Application shutting down...")
+        logger.error(f"Error closing database connections: {e}", exc_info=True)
+    logger.info("Application shutting down...")
 
 
 # Crear la instancia de FastAPI con configuración de producción
@@ -48,6 +54,12 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Add logging middleware (should be added first)
+app.add_middleware(
+    LoggingMiddleware, exclude_paths=["/health", "/metrics", "/favicon.ico"]
+)
+app.add_middleware(PerformanceLoggingMiddleware, slow_request_threshold=2.0)
 
 # Add security middleware
 app.add_middleware(
@@ -94,6 +106,7 @@ app.include_router(tasks.router)  # Task management routes
 @app.get("/health", tags=["monitoring"])
 async def health_check():
     """Health check endpoint for monitoring and load balancers"""
+    logger.debug("Health check requested")
     return {"status": "healthy", "timestamp": time.time(), "version": "1.0.0"}
 
 
