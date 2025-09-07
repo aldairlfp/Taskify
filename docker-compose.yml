@@ -1,0 +1,50 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: taskify_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: taskify_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - taskify_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taskify_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskify_api
+    environment:
+      DATABASE_URL: postgresql://postgres:1234@postgres:5432/taskify_db
+      ENVIRONMENT: production
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - .:/app
+    networks:
+      - taskify_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  taskify_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
