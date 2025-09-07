@@ -7,6 +7,7 @@ sqlmodel==0.0.22
 psycopg2-binary==2.9.10
 asyncpg==0.29.0
 sqlalchemy[asyncio]==2.0.32
+alembic==1.13.1
 
 # Authentication
 python-jose[cryptography]==3.3.0
