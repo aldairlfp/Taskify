@@ -2,6 +2,7 @@
 Async authentication utilities for JWT token handling and password management
 """
 
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -10,17 +11,24 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from dotenv import load_dotenv
 
 from app.core.database import get_db
 from app.models.models import User
 from app.core.logging_config import SecurityLogger, get_logger
 
+# Load environment variables
+load_dotenv()
+
 logger = get_logger(__name__)
 
-# JWT Configuration
-SECRET_KEY = "your-secret-key-change-this-in-production"  # In production, use environment variable
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# JWT Configuration from environment variables
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required")
+
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
